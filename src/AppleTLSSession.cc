@@ -53,8 +53,12 @@
 
 namespace {
 #if !defined(__MAC_10_8)
-static const SSLProtocol kTLSProtocol11 = (SSLProtocol)(kSSLProtocolAll + 1);
-static const SSLProtocol kTLSProtocol12 = (SSLProtocol)(kSSLProtocolAll + 2);
+static const SSLProtocol kTLSProtocol11 = (SSLProtocol)7;
+static const SSLProtocol kTLSProtocol12 = (SSLProtocol)8;
+#endif
+
+#if !defined(__MAC_10_13)
+static const SSLProtocol kTLSProtocol13 = (SSLProtocol)10;
 #endif
 
 #ifndef CIPHER_NO_DHPARAM
@@ -92,6 +96,8 @@ static inline const char* protoToString(SSLProtocol proto)
     return "TLSv1.1";
   case kTLSProtocol12:
     return "TLSv1.2";
+  case kTLSProtocol13:
+    return "TLSv1.3";
   default:
     return "Unknown";
   }
@@ -173,6 +179,9 @@ static struct {
     SUITE(TLS_ECDH_anon_WITH_3DES_EDE_CBC_SHA, 0xC017),
     SUITE(TLS_ECDH_anon_WITH_AES_128_CBC_SHA, 0xC018),
     SUITE(TLS_ECDH_anon_WITH_AES_256_CBC_SHA, 0xC019),
+    SUITE(TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA, 0xC035),
+    SUITE(TLS_ECDHE_PSK_WITH_AES_256_CBC_SHA, 0xC036),
+    SUITE(TLS_PSK_WITH_CHACHA20_POLY1305_SHA256, 0xCCAB),
     SUITE(TLS_NULL_WITH_NULL_NULL, 0x0000),
     SUITE(TLS_RSA_WITH_NULL_MD5, 0x0001),
     SUITE(TLS_RSA_WITH_NULL_SHA, 0x0002),
@@ -255,6 +264,11 @@ static struct {
     SUITE(TLS_RSA_PSK_WITH_AES_256_CBC_SHA384, 0x00B7),
     SUITE(TLS_RSA_PSK_WITH_NULL_SHA256, 0x00B8),
     SUITE(TLS_RSA_PSK_WITH_NULL_SHA384, 0x00B9),
+    SUITE(TLS_AES_128_GCM_SHA256, 0x1301),
+    SUITE(TLS_AES_256_GCM_SHA384, 0x1302),
+    SUITE(TLS_CHACHA20_POLY1305_SHA256, 0x1303),
+    SUITE(TLS_AES_128_CCM_SHA256, 0x1304),
+    SUITE(TLS_AES_128_CCM_8_SHA256, 0x1305),
     SUITE(TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, 0xC023),
     SUITE(TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384, 0xC024),
     SUITE(TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256, 0xC025),
@@ -271,7 +285,8 @@ static struct {
     SUITE(TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, 0xC030),
     SUITE(TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256, 0xC031),
     SUITE(TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384, 0xC032),
-    SUITE(TLS_EMPTY_RENEGOTIATION_INFO_SCSV, 0x00FF),
+    SUITE(TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, 0xCCA8),
+    SUITE(TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, 0xCCA9),
     SUITE(SSL_RSA_WITH_RC2_CBC_MD5, 0xFF80),
     SUITE(SSL_RSA_WITH_IDEA_CBC_MD5, 0xFF81),
     SUITE(SSL_RSA_WITH_DES_CBC_MD5, 0xFF82),
@@ -376,17 +391,14 @@ AppleTLSSession::AppleTLSSession(AppleTLSContext* ctx)
 
 #if defined(__MAC_10_8)
   switch (ctx->getMinTLSVersion()) {
-  case TLS_PROTO_SSL3:
-    (void)SSLSetProtocolVersionMin(sslCtx_, kSSLProtocol3);
-    break;
-  case TLS_PROTO_TLS10:
-    (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol1);
-    break;
   case TLS_PROTO_TLS11:
     (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol11);
     break;
   case TLS_PROTO_TLS12:
     (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol12);
+    break;
+  case TLS_PROTO_TLS13:
+    (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol13);
     break;
   default:
     break;
@@ -394,17 +406,14 @@ AppleTLSSession::AppleTLSSession(AppleTLSContext* ctx)
 #else
   (void)SSLSetProtocolVersionEnabled(sslCtx_, kSSLProtocolAll, false);
   switch (ctx->getMinTLSVersion()) {
-  case TLS_PROTO_SSL3:
-    (void)SSLSetProtocolVersionEnabled(sslCtx_, kSSLProtocol3, true);
-  // fall through
-  case TLS_PROTO_TLS10:
-    (void)SSLSetProtocolVersionEnabled(sslCtx_, kTLSProtocol1, true);
-  // fall through
   case TLS_PROTO_TLS11:
     (void)SSLSetProtocolVersionEnabled(sslCtx_, kTLSProtocol11, true);
   // fall through
   case TLS_PROTO_TLS12:
     (void)SSLSetProtocolVersionEnabled(sslCtx_, kTLSProtocol12, true);
+  // fall through
+  case TLS_PROTO_TLS13:
+    (void)SSLSetProtocolVersionEnabled(sslCtx_, kTLSProtocol13, true);
   default:
     break;
   }
@@ -748,17 +757,14 @@ int AppleTLSSession::tlsConnect(const std::string& hostname,
                   protoToString(proto), suiteToString(suite).c_str()));
 
   switch (proto) {
-  case kSSLProtocol3:
-    version = TLS_PROTO_SSL3;
-    break;
-  case kTLSProtocol1:
-    version = TLS_PROTO_TLS10;
-    break;
   case kTLSProtocol11:
     version = TLS_PROTO_TLS11;
     break;
   case kTLSProtocol12:
     version = TLS_PROTO_TLS12;
+    break;
+  case kTLSProtocol13:
+    version = TLS_PROTO_TLS13;
     break;
   default:
     version = TLS_PROTO_NONE;

@@ -1400,7 +1400,7 @@ Advanced Options
 .. option:: --gid=<GID>
 
   Set GID manually. aria2 identifies each download by the ID called
-  GID. The GID must be hex string of 16 characters, thus [0-9a-zA-Z]
+  GID. The GID must be hex string of 16 characters, thus [0-9a-fA-F]
   are allowed and leading zeros must not be stripped. The GID all 0 is
   reserved and must not be used. The GID must be unique, otherwise
   error is reported and the download is not added.  This option is
@@ -1477,8 +1477,8 @@ Advanced Options
 .. option:: --min-tls-version=<VERSION>
 
   Specify minimum SSL/TLS version to enable.
-  Possible Values: ``SSLv3``, ``TLSv1``, ``TLSv1.1``, ``TLSv1.2``
-  Default: ``TLSv1``
+  Possible Values: ``TLSv1.1``, ``TLSv1.2``, ``TLSv1.3``
+  Default: ``TLSv1.2``
 
 .. option:: --multiple-interface=<INTERFACES>
 
