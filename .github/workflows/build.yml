@@ -1,66 +1,137 @@
-name: build
+name: Build Binary
 
-on: push
+on:
+  push:
+    branches:
+      - build
+  watch:
+    types: [started]
 
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
     strategy:
       matrix:
-        os: [ubuntu-20.04, macos-10.15]
-        compiler: [gcc, clang]
-
+        os: [ubuntu-latest, macos-10.15]
+        # arch: [amd64, arm64]
+        arch: [amd64, arm64, ppc64le, s390x, 386, arm]
     steps:
-    - uses: actions/checkout@v2
-    - name: Linux setup
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get install \
-          g++-8 \
-          autoconf \
-          automake \
-          autotools-dev \
-          autopoint \
-          libtool \
-          pkg-config \
-          libssl-dev \
-          libc-ares-dev \
-          zlib1g-dev \
-          libsqlite3-dev \
-          libssh2-1-dev \
-          libcppunit-dev
-    - name: MacOS setup
-      if: runner.os == 'macOS'
-      run: |
-        brew install cppunit gettext openssl libssh2 c-ares sqlite3 \
-          autoconf automake pkg-config libtool
-    - name: Setup clang
-      if: matrix.compiler == 'clang'
-      run: |
-        echo 'CC=clang' >> $GITHUB_ENV
-        echo 'CXX=clang++' >> $GITHUB_ENV
-    - name: Setup gcc
-      if: runner.os == 'Linux' && matrix.compiler == 'gcc'
-      run: |
-        echo 'CC=gcc-8' >> $GITHUB_ENV
-        echo 'CXX=g++-8' >> $GITHUB_ENV
-    - name: Libtool
-      run: |
-        autoreconf -i
-    - name: Configure autotools (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        ./configure \
-          CPPFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
-    - name: Configure autotools (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        ./configure \
-          --without-openssl --without-gnutls --with-appletls \
-          --disable-nls \
-          CPPFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
-    - name: Build aria2
-      run: |
-        make
-        make check
+      - name: Check Out Branch
+        uses: actions/checkout@master
+        with:
+          ref: build
+      - name: Linux Build
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt install -y screen
+          mkdir ./artifact
+          arch=${{ matrix.arch }}
+          screen -dmS "screenexec_$arch" bash -c "nc -l 9999 > $(pwd)/artifact/aria2c-linux-$arch && chmod a+x aria2c-linux-$arch";
+          HOST=$(ip -4 address|grep docker|grep -oE '([0-9]+\.){3}[0-9]+'|grep -v 255)
+          docker run --rm --privileged tonistiigi/binfmt:latest --install all
+          docker buildx create --use --name=multibulider --driver docker-container --driver-opt image=moby/buildkit:master
+          docker buildx use multibulider
+          docker buildx build --build-arg HOST=${HOST} --platform linux/${arch} -t aria2 .
+      - name: macOS Build
+        if: ${{ runner.os == 'macOS' && matrix.arch == 'amd64' }}
+        run: |
+          brew install cppunit gettext openssl libssh2 c-ares sqlite3 \
+          autoconf automake pkg-config libtool libuv libxml2 zlib upx libuv
+          (cd ..;
+          curl https://c-ares.haxx.se/download/c-ares-1.17.1.tar.gz -o c-ares.tar.gz;
+          tar xf c-ares.tar.gz;
+          cd c-ares-*;
+          ./configure --disable-shared;
+          make -j`sysctl -n machdep.cpu.thread_count`;
+          make install -j`sysctl -n machdep.cpu.thread_count`;)
+          git checkout build
+          autoreconf -i;
+          export LDFLAGS="-L/usr/local/opt/libxml2/lib -L/usr/local/opt/zlib/lib -L/usr/local/opt/openssl@1.1/lib -L/usr/local/opt/sqlite3/lib -L/usr/local/lib -L/usr/local/opt/libuv/lib";
+          export CPPFLAGS="-I/usr/local/opt/libxml2/include -I/usr/local/opt/zlib/include -I/usr/local/opt/openssl@1.1/include -I/usr/local/opt/sqlite3/include -I/usr/local/include -I/usr/local/opt/libuv/include";
+          export PKG_CONFIG_PATH="/usr/local/opt/sqlite3/lib/pkgconfig:/usr/local/opt/libxml2/lib/pkgconfig:/usr/local/opt/zlib/lib/pkgconfig:/usr/local/opt/openssl@1.1/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/opt/libuv/lib/pkgconfig";
+          export CC=clang
+          export CXX=clang++
+          sudo rm -fr /usr/local/opt/libxml2/lib/*.dylib /usr/local/opt/libssh2/lib/*.dylib /usr/local/opt/openssl@1.1/lib/*.dylib /usr/local/opt/openssl@1.1/lib/*.dylib \
+          /usr/local/opt/c-ares/lib/*.dylib /usr/local/opt/gettext/lib/*.dylib /usr/local/opt/sqlite/lib/*.dylib /usr/local/opt/zlib/lib/*.dylib /usr/local/opt/libuv/lib/*.dylib || true;
+          ./configure \
+          --prefix=/usr/local \
+          --without-appletls \
+          --without-gnutls \
+          --with-openssl \
+          --with-libuv \
+          --with-libssh2 \
+          --with-sqlite3 \
+          --with-ca-bundle='/usr/local/etc/openssl/cert.pem' \
+          ARIA2_STATIC=yes \
+          --enable-shared=no
+          make -j`sysctl -n machdep.cpu.thread_count`
+          strip src/aria2c
+          upx src/aria2c
+          mkdir ./artifact/
+          mv src/aria2c ./artifact/aria2c-macos-amd64
+      - name: upload macOS aria2c
+        if: ${{ runner.os == 'macOS' && matrix.arch == 'amd64' }}
+        uses: actions/upload-artifact@master
+        with:
+          name: aria2c-macos-amd64
+          path: ./artifact/
+      - name: upload Linux aria2c
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@master
+        with:
+          name: aria2c-linux-${{ matrix.arch }}
+          path: ./artifact/
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Build Date
+        run: echo "ReleaseVersion=`date +%Y%m%d`" >> $GITHUB_ENV
+      - name: Retrieve aria2c-macos-amd64
+        uses: actions/download-artifact@master
+        with:
+          name: aria2c-macos-amd64
+          path: ./artifact
+      - name: Retrieve aria2c-linux-amd64
+        uses: actions/download-artifact@master
+        with:
+          name: aria2c-linux-amd64
+          path: ./artifact
+      - name: Retrieve aria2c-linux-arm64
+        uses: actions/download-artifact@master
+        with:
+          name: aria2c-linux-arm64
+          path: ./artifact
+      - name: Retrieve aria2c-linux-ppc64le
+        uses: actions/download-artifact@master
+        with:
+          name: aria2c-linux-ppc64le
+          path: ./artifact
+      - name: Retrieve aria2c-linux-s390x
+        uses: actions/download-artifact@master
+        with:
+          name: aria2c-linux-s390x
+          path: ./artifact
+      - name: Retrieve aria2c-linux-386
+        uses: actions/download-artifact@master
+        with:
+          name: aria2c-linux-386
+          path: ./artifact
+      - name: Retrieve aria2c-linux-arm
+        uses: actions/download-artifact@master
+        with:
+          name: aria2c-linux-arm
+          path: ./artifact
+      # - name: SSH 连接到 Actions
+      #   uses: P3TERX/ssh2actions@main
+      #   env:
+      #     TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      #     TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: release
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: '${{ secrets.GITHUB_TOKEN }}'
+          prerelease: false
+          automatic_release_tag: ${{ env.ReleaseVersion }}
+          title: ${{ env.ReleaseVersion }}
+          files: ./artifact/*
