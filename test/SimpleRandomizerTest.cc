@@ -2,7 +2,7 @@
 /*
  * aria2 - The high speed download utility
  *
- * Copyright (C) 2012 Tatsuhiro Tsujikawa
+ * Copyright (C) 2022 Tatsuhiro Tsujikawa
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,22 +32,39 @@
  * files in the program, then also delete it here.
  */
 /* copyright --> */
-#ifndef D_VALUE_BASE_BENCODE_PARSER_H
-#define D_VALUE_BASE_BENCODE_PARSER_H
+#include "SimpleRandomizer.h"
 
-#include "GenericParser.h"
-#include "BencodeParser.h"
-#include "ValueBaseStructParserStateMachine.h"
+#include <set>
+#include <array>
+
+#include <cppunit/extensions/HelperMacros.h>
 
 namespace aria2 {
 
-namespace bittorrent {
+class SimpleRandomizerTest : public CppUnit::TestFixture {
+  CPPUNIT_TEST_SUITE(SimpleRandomizerTest);
+  CPPUNIT_TEST(testGetRandomBytes);
+  CPPUNIT_TEST_SUITE_END();
 
-typedef GenericParser<BencodeParser, ValueBaseStructParserStateMachine, true>
-    ValueBaseBencodeParser;
+public:
+  void testGetRandomBytes();
+};
 
-} // namespace bittorrent
+CPPUNIT_TEST_SUITE_REGISTRATION(SimpleRandomizerTest);
+
+void SimpleRandomizerTest::testGetRandomBytes()
+{
+  std::set<std::string> set;
+
+  constexpr size_t n = 5000;
+
+  for (size_t i = 0; i < 5000; ++i) {
+    std::array<unsigned char, 257> buf;
+    SimpleRandomizer::getInstance()->getRandomBytes(buf.data(), buf.size());
+    set.emplace(std::begin(buf), std::end(buf));
+  }
+
+  CPPUNIT_ASSERT_EQUAL(n, set.size());
+}
 
 } // namespace aria2
-
-#endif // D_VALUE_BASE_BENCODE_PARSER_H
