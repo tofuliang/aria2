@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-10.15]
+        os: [ubuntu-latest, macos-10.11]
         # arch: [amd64, arm64]
         arch: [amd64, arm64, ppc64le, s390x, 386, arm]
     steps:

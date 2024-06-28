@@ -466,7 +466,7 @@ HTTP(S)/FTP, они тут же могут выгружаться в BitTorrent-
   Посылать ``Accept-Encoding: deflate, gzip`` в запросе-заголовке и добавлять в ответ,
   если удаленный сервер ответит ``Content-Encoding: gzip`` или
   ``Content-Encoding: deflate``.
-  По умолчанию: 'false
+  По умолчанию: ``false``
 
   .. note::
 
@@ -591,6 +591,10 @@ HTTP(S)/FTP, они тут же могут выгружаться в BitTorrent-
   Использовать метод HEAD для первого запроса к HTTP серверу.
   По умолчанию: ``false``
 
+.. option:: --no-want-digest-header [true|false]
+
+  Отключить заголовок Want-Digest при выполнении запросов.
+  По умолчанию: ``false``
 
 .. option:: -U, --user-agent=<USER_AGENT>
 

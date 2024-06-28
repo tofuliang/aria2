@@ -98,7 +98,7 @@
 #define TEXT_PROXY_METHOD                                               \
   _(" --proxy-method=METHOD        Set the method to use in proxy request.")
 #define TEXT_REFERER                                                    \
-  _(" --referer=REFERER            Set an http referrrer (Referer). This affects\n" \
+  _(" --referer=REFERER            Set an http referrer (Referer). This affects\n" \
     "                              all http/https downloads. If \"*\" is given,\n" \
     "                              the download URI is also used as the referrer.\n" \
     "                              This may be useful when used together with\n" \
@@ -658,7 +658,7 @@
     "                              interface name, IP address and hostname.")
 #define TEXT_MULTIPLE_INTERFACE                                         \
   _(" --multiple-interface=INTERFACES Comma separated list of interfaces to bind\n" \
-    "                              sockets to. Requests will be splited among the\n" \
+    "                              sockets to. Requests will be split among the\n" \
     "                              interfaces to achieve link aggregation. You can\n" \
     "                              specify interface name, IP address and hostname.\n" \
     "                              If --interface is used, this option will be\n" \
